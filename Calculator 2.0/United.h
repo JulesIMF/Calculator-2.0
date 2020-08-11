@@ -12,7 +12,7 @@
 #include <time.h>
 //<Element.h>
 enum ElementType { _symbol, _number, _element }; //Тип элемента
-enum OperatorType { _add, _sub, _mlp, _div, _pow, _root }; //Тип оператора
+enum OperatorType { _add, _sub, _mlp, _div, _pow, _root, _and, _or, _xor, _mod }; //Тип оператора
 
 
 class Element
@@ -111,14 +111,23 @@ Symbol::Symbol(OperatorType o, int p)
 	otype = o;
 	switch (o)
 	{
+	case _div:
+		priority += 0.1;
 	case _pow:
 	case _root:
-		priority += 0.25;
+		priority += 0.1;
 	case _mlp:
-	case _div:
-		priority += 0.25;
+		priority += 0.1;
+	case _mod:
+		priority += 0.1;
 	case _add:
 	case _sub:
+		priority += 0.1;
+	case _and:
+		priority += 0.1;
+	case _xor:
+		priority += 0.1;
+	case _or:
 		priority += static_cast<float>(p);
 	}
 
@@ -141,13 +150,15 @@ const char* ExceptionMessages[] =
 	/*10*/ "Переменной \"ans\" невозможно менять значение вручную.\n",
 	/*11*/ "Содержатся неподдерживаемые символы.\n",
 	/*12*/ "Некорректное выражение.\n",
+	/*13*/ "Взятие по неположительному модулю.\n",
+	/*14*/ "Факторизация неположительного числа.\n"
 };
 
 //char -> int
 extern int aaoi(char c);
 
 //Функция ставит слово "годик" в соответствующий CurrentYear падеж
-std::string age(int CurrentYear)
+std::string gCase(int CurrentYear)
 {
 	if (CurrentYear % 100 >= 10 && CurrentYear % 100 <= 20)
 		return "годиков";
@@ -166,21 +177,24 @@ int julesAge()
 	time(&tCurrentTime);
 	tm* tk = localtime(&tCurrentTime);
 
-	if (tk->tm_mon < 1)
-		return tk->tm_year - 103;
-	if (tk->tm_mon == 1 && tk->tm_mday < 22)
-		return tk->tm_year - 103;
+	int returnedValue; //Необходимо, чтобы удалить tk
 
-	return tk->tm_year - 102;
+	if (tk->tm_mon < 1)
+		returnedValue = tk->tm_year - 103;
+	if (tk->tm_mon == 1 && tk->tm_mday < 22)
+		returnedValue = tk->tm_year - 103;
+
+	returnedValue = tk->tm_year - 102;
+	return returnedValue;
 }
 
 //Функция выводит начальный экран
 void infoOut()
 {
-	std::cout << "Calculator v. 2.2" << std::endl << "Джулс, " << julesAge();
+	std::cout << "Calculator v. 2.3" << std::endl << "Джулс, " << julesAge();
 	std::cout << ((julesAge() != 16) ? (" (на момент создания 16)") : ("")) << " ";
-	std::cout << age(julesAge()) << ", 2018 год." << std::endl;
-	std::cout << "Учтите, что киррилические символы не поддерживаются." << std::endl;
+	std::cout << gCase(julesAge()) << ", 2018 год." << std::endl;
+	std::cout << "Киррилические символы не поддерживаются." << std::endl;
 	std::cout << "Для вывода помощи наберите \"#help\"." << std::endl << std::endl;
 }
 
@@ -389,10 +403,34 @@ std::string d_case(int numeral)
 	return "дня";
 }
 
-bool parseDate(Moment * *moment)
+enum class DateCommand { NO_COMMAND, ESCAPE }; //Необходимо для реализации команды #escape
+inline std::string smaller(std::string s); //Определяется позднее
+
+bool parseDate(Moment** moment, DateCommand& dateCommand)
 {
 	std::string s;
 	std::cin >> s;
+
+	dateCommand = DateCommand::NO_COMMAND;
+
+	//Если перехотелось использовать режим
+	if (smaller(s) == "#escape")
+	{
+		dateCommand = DateCommand::ESCAPE;
+		return true;
+	}
+
+	//Если дата - сегодня
+	if (smaller(s) == "#today")
+	{
+		time_t tCurrentTime;
+		time(&tCurrentTime);
+		tm* tk = localtime(&tCurrentTime);
+		*moment = new Moment(tk->tm_mday, tk->tm_mon + 1, tk->tm_year + 1900);
+		delete tk;
+		return true;
+	}
+
 	int d, m, y;
 
 	//Выражение должно иметь вид "dd.mm.yyyy"
@@ -555,7 +593,7 @@ void calculateDataDifference(Moment m1, Moment m2)
 
 	if (counter.getDay() != d)
 		std::cout << "Также разница составляет ровно " << d
-				  << " " << d_case(d) << "." << std::endl;
+		<< " " << d_case(d) << "." << std::endl;
 }
 
 
@@ -567,21 +605,28 @@ void helpOut() {
 	std::cout << "Умножение\t\t\t\t8*9" << std::endl;
 	std::cout << "Деление\t\t\t\t\t91/13" << std::endl;
 	std::cout << "Возведение в степень\t\t\t2^10" << std::endl;
-	std::cout << "Взятие квадратного корня\t\t_2" << std::endl << std::endl;
+	std::cout << "Взятие по модулю\t\t\t13%7" << std::endl;
+	std::cout << "Взятие квадратного корня\t\t_2" << std::endl;
+	std::cout << "Побитовое ИЛИ\t\t\t\t7|16" << std::endl;
+	std::cout << "Побитовое И\t\t\t\t7&15" << std::endl;
+	std::cout << "Побитовое ИСКЛЮЧАЮЩЕЕ ИЛИ\t\t7$16" << std::endl << std::endl;
 	std::cout << "Для получения ответа необходимо ввести какое-либо выражение. Пример:" << std::endl;
-	std::cout << "(2+2)*2" << std::endl << "  =8" << std::endl;
+	std::cout << "(2+2)*2" << std::endl << "=  8" << std::endl;
 	std::cout << "Заметьте, что скобочная последовательность должна являться корректной. \n"
-				 "Допускается отсутствие последних закрывающих скобок.\n";
+		"Допускается отсутствие последних закрывающих скобок.\n";
 	std::cout << "Программа поддерживает неограниченное количество переменных "
-				 "(ячеек памяти).\nВ каждую из них можно записать последний ответ.\n";
+		"(ячеек памяти).\nВ каждую из них можно записать последний ответ.\n";
 	std::cout << "Ячейка \"ans\" зарезервирована и всегда хранит последний ответ.\n";
 	std::cout << "Пример использования:" << std::endl;
 	std::cout << "afd+5*(6+7/3.5)" << std::endl << "=  43\nЗдесь ячейка \"afd\" хранила значение 3.\n" << std::endl;
 	std::cout << "Программа поддерживает команды. Любая команда начинается с символа \"#\"."
-			  << std::endl << "Список команд:" << std::endl << std::endl;
+		<< std::endl << "Список команд:" << std::endl << std::endl;
 	std::cout << "#set <name>\t\tУстанавливает значение ячейки <name> равным последнему ответу" << std::endl;
 	std::cout << "#list\t\t\tПоказывает все ответы, найденные за время работы программы" << std::endl;
-	std::cout << "#date\t\t\tРассчёт разницы между днями" << std::endl;
+	std::cout << "#date\t\t\tРасчёт разницы между днями" << std::endl;
+	std::cout << "#escape\t\t\tВыход из режима расчёта дат" << std::endl;
+	std::cout << "#today\t\t\tУстанавливает текущую дату" << std::endl;
+	std::cout << "#fact <num>\t\tФакторизует число <num>" << std::endl;
 	std::cout << "#cls\t\t\tСтирает всё с экрана, оставляя только начальный экран" << std::endl;
 	std::cout << "#vacant\t\t\tСтирает абсолютно всё с экрана" << std::endl;
 	std::cout << "#restart\t\tПерезагружает программу" << std::endl;
@@ -591,7 +636,7 @@ void helpOut() {
 	std::cout << "#quit\t\t\tЗавершает программу" << std::endl;
 	std::cout << "#exit\t\t\tТо же, что и #quit" << std::endl;
 	std::cout << "#terminate\t\tТо же, что и #quit" << std::endl;
-
+	std::cout << std::endl;
 }
 
 
@@ -621,7 +666,7 @@ std::string ctos(char c)
 
 //Функция выделяет имя переменной
 //из запроса, модифицируя итератор i
-inline std::string sub_name(std::string & s, int& i)
+inline std::string sub_name(std::string& s, int& i)
 {
 	std::string ans;
 	for (; i < s.size(); i++)
@@ -643,7 +688,7 @@ inline std::string sub_name(std::string & s, int& i)
 //Функция проверяет, является ли
 //имя переменной зарезервированной
 //переменной "ans"
-inline bool subname_is_ans(std::string & s, int& i)
+inline bool subname_is_ans(std::string& s, int& i)
 {
 	return (s.substr(i, 3) == "ans") ? true : false;
 }
@@ -662,9 +707,14 @@ inline void err_out(std::string s)
 //введеный запрос командой к выходу
 bool isQuit(std::string s)
 {
-	if (smaller(s).substr(0, 5) == "#quit" ||
-		smaller(s).substr(0, 10) == "#terminate" ||
-		smaller(s).substr(0, 5) == "#exit") return true;
+	//Убираем лишние пробелы
+	int it = 0;
+	for (; s.size() - it; it++)
+		if (s[it] != ' ') break;
+
+	if (smaller(s).substr(it, 5) == "#quit" ||
+		smaller(s).substr(it, 10) == "#terminate" ||
+		smaller(s).substr(it, 5) == "#exit") return true;
 
 	else return false;
 }
@@ -674,8 +724,6 @@ bool isQuit(std::string s)
 //Точка входа в приложение
 int main()
 {
-	//wchar_t applicationTitle[] = L"Calculator 2.2\0";
-	//SetConsoleTitle(applicationTitle);
 	bool julesEnabled = true;
 	bool julesOnceDisabled = false;
 	setlocale(LC_ALL, "RUS");
@@ -730,30 +778,48 @@ int main()
 
 			//<Обработка команд>
 
-						//Проверяем, является ли intput командой
-			if (input[0] == '#')
+			//Убираем лишние пробелы
+			int it = 0;
+
+			for (; input.size() - it; it++)
+				if (input[it] != ' ') break;
+			if (it == input.size())
+				continue;
+
+			//Проверяем, является ли input командой
+
+
+			if (input[it] == '#')
 			{
-				if (input.size() < 4) throw 8; //Нет команды короче 3 символов
+				if (input.size() - it < 4) throw 8; //Нет команды короче 3 символов
 
 				//Команда установки переменной
-				if (smaller(input.substr(1, 3)) == "set")
+				if (smaller(input.substr(it + 1, 3)) == "set")
 				{
 					//Продвигаем i на 4 символа вперед 
 					//и проверяем, все ли нормально
-					int i = 4;
+					int i = it + 4;
 					for (; i < input.size(); i++)
 					{
-						if (isalpha(input[i])) break;
-
+						if (isalpha(input[i]))
+							continue;
 						if (input[i] != ' ')
 							throw 3; //Неизвестный символ
+					}
+
+					int nameBegin = it + 4;
+
+					while (nameBegin != input.size())
+					{
+						if (input[nameBegin] != ' ') break;
+						nameBegin++;
 					}
 
 					//Устанавливать переменную можно, только
 					//если хоть раз выполнялось вычисление
 					if (counter)
 					{
-						std::string variableName = sub_name(input, i);
+						std::string variableName = sub_name(input, nameBegin);
 						if (variableName == "")
 							throw 1; //Что за переменная "" ?
 
@@ -770,52 +836,107 @@ int main()
 				}
 
 				//Команда факторизации
-				if (smaller(input.substr(1, 4)) == "fact")
+				if (smaller(input.substr(it + 1, 4)) == "fact")
 				{
 					//Продвигаем i на 4 символа вперед 
 					//и проверяем, все ли нормально
-					int i = 4;
+					int i = it + 5;
 					for (; i < input.size(); i++)
 					{
-						if (isalpha(input[i])) break;
+						if (isdigit(input[i]))
+							continue;
+
+						if (input[i] == '.')
+							continue;
 
 						if (input[i] != ' ')
 							throw 3; //Неизвестный символ
 					}
 
-					//Устанавливать переменную можно, только
-					//если хоть раз выполнялось вычисление
-					if (counter)
+					int numBegin = it + 6;
+
+					while (numBegin != input.size())
 					{
-						std::string variableName = sub_name(input, i);
-						if (variableName == "")
-							throw 1; //Что за переменная "" ?
-
-						if (variableName == "ans")
-							throw 10; //Зарезервированное имя
-
-						memory[variableName] = ans;
-						std::cout << "Значение переменной \"" << variableName
-							<< "\" установлено." << std::endl;
-
+						if (input[numBegin] != ' ') break;
+						numBegin++;
 					}
-					else throw 9; //Переменная "ans" еще не хранит значение
+
+					Number number;
+					number.find_num(input, numBegin);
+
+					long long numberToFact = static_cast<int> (number.value);
+
+					//Факторизация неположительного числа
+					if (numberToFact < 0)
+					{
+						throw 14;
+					}
+
+					if (numberToFact == static_cast<long long> (1))
+					{
+						std::cout << 1 << std::endl;
+						continue;
+					}
+
+					else
+					{
+						long long divisor = static_cast<long long> (2);
+
+						auto divisorPrint = [](long long divisor, int pow, long long currentNumberToFact)
+						{
+							if (pow == 1)
+								std::cout << divisor;
+
+							else
+							{
+								std::cout << '(';
+								std::cout << divisor;
+								std::cout << " ^ ";
+								std::cout << pow;
+								std::cout << ')';
+							}
+
+							if (currentNumberToFact != static_cast<long long>(1))
+								std::cout << " * ";
+						};
+
+						while (numberToFact > 1)
+						{
+							int pow = 0;
+							while (numberToFact % divisor == 0)
+							{
+								pow++;
+								numberToFact /= divisor;
+							}
+
+							if (pow)
+							{
+								divisorPrint(divisor, pow, numberToFact);
+							}
+
+							divisor++;
+						}
+
+						std::cout << std::endl;
+					}
+
 					continue;
+
 				}
 
 				//Все остальные команды
 				else
 				{
-
+					it++;
 					//<Пасхалка>
-					if (smaller(input.substr(1, 11)) == "enablejules")
+					if (smaller(input.substr(it, 11)) == "enablejules")
 					{
 						if (julesEnabled) std::cout << "Джулс и так enabled" << std::endl;
 						else std::cout << "Ккккккк" << std::endl;
 						julesEnabled = true;
 						continue;
 					}
-					if (smaller(input.substr(1, 12)) == "disablejules")
+					if (smaller(input.substr(it, 12)) == "disablejules")
 					{
 						if (!julesEnabled) std::cout << "Джулс и так disabled (в плане пасхалочки)" << std::endl;
 						else
@@ -830,7 +951,7 @@ int main()
 					//</Пасхалка>
 
 					//Пустой экран
-					if (smaller(input.substr(1, 6)) == "vacant")
+					if (smaller(input.substr(it, 6)) == "vacant")
 					{
 						system("cls");
 						continue;
@@ -838,7 +959,7 @@ int main()
 
 
 					//Пустой экран, но с информацией о программе
-					if (smaller(input.substr(1, 3)) == "cls")
+					if (smaller(input.substr(it, 3)) == "cls")
 					{
 						system("cls");
 						infoOut();
@@ -847,7 +968,7 @@ int main()
 
 					//Вывести все результаты, которые были
 					//получены в ходе работы программы
-					if (smaller(input.substr(1, 4)) == "list" || smaller(input.substr(1, 4)) == "show")
+					if (smaller(input.substr(it, 4)) == "list" || smaller(input.substr(it, 4)) == "show")
 					{
 						for (int i = 0; i < listOfAnswers.size(); i++)
 						{
@@ -859,15 +980,15 @@ int main()
 					}
 
 					//Команда вывода помощи
-					if (smaller(input.substr(1, 4)) == "help")
+					if (smaller(input.substr(it, 4)) == "help")
 					{
 						helpOut();
 						continue;
 					}
 
 					//Перезагрузка программы
-					if (smaller(input.substr(1, 4)) == "init" ||
-						smaller(input.substr(1, 7)) == "restart")
+					if (smaller(input.substr(it, 4)) == "init" ||
+						smaller(input.substr(it, 7)) == "restart")
 
 					{
 						counter = 0;
@@ -890,7 +1011,7 @@ int main()
 					}
 
 					//Перезагрузка программы + system("cls")
-					if (smaller(input.substr(1, 4)) == "void")
+					if (smaller(input.substr(it, 4)) == "void")
 					{
 						counter = 0;
 						input = "";
@@ -911,18 +1032,34 @@ int main()
 					}
 
 					//Обработка сравнения дат
-					if (smaller(input.substr(1, 4)) == "date" || smaller(input.substr(1, 4)) == "data") 
+					if (smaller(input.substr(it, 4)) == "date" || smaller(input.substr(it, 4)) == "data")
 					{
+						std::cout << "Режим расчёта разницы между датами.\n"
+							"Для отмены введите команду \"#escape\".\n\n";
+
+						DateCommand dateCommand;
 						Moment* m1 = nullptr, * m2 = nullptr;
 						do
 						{
 							std::cout << "Введите первую дату в формате ДД.ММ.ГГГГ: ";
+						} while (parseDate(&m1, dateCommand) != true);
+
+						if (dateCommand == DateCommand::ESCAPE)
+						{
+							std::cout << "Выход из режима расчёта дат.\n\n";
+							continue;
 						}
-						while (parseDate(&m1) != true);
+
 						do
 						{
 							std::cout << "Введите вторую дату в формате ДД.ММ.ГГГГ: ";
-						} while (parseDate(&m2) != true);
+						} while (parseDate(&m2, dateCommand) != true);
+
+						if (dateCommand == DateCommand::ESCAPE)
+						{
+							std::cout << "Выход из режима расчёта дат.\n\n";
+							continue;
+						}
 
 						calculateDataDifference((*m1), (*m2));
 						continue;
@@ -940,7 +1077,7 @@ int main()
 			for (int i = 0; i < input.size(); i++)
 			{
 				//Пробел ничего не значит
-				if (input[i] == ' ') 
+				if (input[i] == ' ')
 					continue;
 
 				//Если тут буква, то это переменная
@@ -1026,6 +1163,30 @@ int main()
 
 				case '^':
 					sp = new Symbol(_pow, CBS);
+					v.insert(v.end(), sp);
+					sp = nullptr;
+					continue;
+
+				case '$':
+					sp = new Symbol(_xor, CBS);
+					v.insert(v.end(), sp);
+					sp = nullptr;
+					continue;
+
+				case '&':
+					sp = new Symbol(_and, CBS);
+					v.insert(v.end(), sp);
+					sp = nullptr;
+					continue;
+
+				case '|':
+					sp = new Symbol(_or, CBS);
+					v.insert(v.end(), sp);
+					sp = nullptr;
+					continue;
+
+				case '%':
+					sp = new Symbol(_mod, CBS);
 					v.insert(v.end(), sp);
 					sp = nullptr;
 					continue;
@@ -1235,6 +1396,89 @@ int main()
 
 					if (isnan(np->value) || isinf(np->value))
 						throw 6; //Тут тоже что-нибудь да может произойти
+
+					delete v[it];
+					delete v[it + 1];
+					delete v[it - 1];
+					v[it] = np;
+					v.erase(v.begin() + it + 1);
+					v.erase(v.begin() + it - 1);
+					np = nullptr;
+					break;
+
+					//Или
+				case _or:
+					np = new Number(static_cast<long double>(
+						(long long)(dynamic_cast<Number*>(v[it - 1])->value)
+						|
+						(long long)(dynamic_cast<Number*>(v[it + 1])->value)));
+
+
+					if (isnan(np->value) || isinf(np->value))
+						throw 6; //Аналогично
+
+					delete v[it];
+					delete v[it + 1];
+					delete v[it - 1];
+					v[it] = np;
+					v.erase(v.begin() + it + 1);
+					v.erase(v.begin() + it - 1);
+					np = nullptr;
+					break;
+
+					//Исключающее или
+				case _xor:
+					np = new Number(static_cast<long double>(
+						(long long)(dynamic_cast<Number*>(v[it - 1])->value)
+						^
+						(long long)(dynamic_cast<Number*>(v[it + 1])->value)));
+
+
+					if (isnan(np->value) || isinf(np->value))
+						throw 6; //Аналогично
+
+					delete v[it];
+					delete v[it + 1];
+					delete v[it - 1];
+					v[it] = np;
+					v.erase(v.begin() + it + 1);
+					v.erase(v.begin() + it - 1);
+					np = nullptr;
+					break;
+
+					//И
+				case _and:
+					np = new Number(static_cast<long double>(
+						(long long)(dynamic_cast<Number*>(v[it - 1])->value)
+						&
+						(long long)(dynamic_cast<Number*>(v[it + 1])->value)));
+
+
+					if (isnan(np->value) || isinf(np->value))
+						throw 6; //Аналогично
+
+					delete v[it];
+					delete v[it + 1];
+					delete v[it - 1];
+					v[it] = np;
+					v.erase(v.begin() + it + 1);
+					v.erase(v.begin() + it - 1);
+					np = nullptr;
+					break;
+
+					//Взятие по модулю
+				case _mod:
+					if (static_cast<long long>(dynamic_cast<Number*>(v[it + 1])->value) <= 0)
+						throw 13; //Взятие по неположительному модулю
+
+					np = new Number(static_cast<long double>(
+						(long long)(dynamic_cast<Number*>(v[it - 1])->value)
+						%
+						(long long)(dynamic_cast<Number*>(v[it + 1])->value)));
+
+
+					if (isnan(np->value) || isinf(np->value))
+						throw 6; //Аналогично
 
 					delete v[it];
 					delete v[it + 1];
